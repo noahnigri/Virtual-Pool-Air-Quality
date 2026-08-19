@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IAQ Simulator — Cleaner air in indoor pools</title>
+<meta name="description" content="A physics-based calculator that predicts chloramine risk in indoor swimming pools. Configure your facility, see interventions ranked by score improvement.">
+<style>
+  /* ----------------------------------------------------------------
+     Restrained palette — 3 colors + subtle tonal variants.
+     Water teal accent matches the pool water in the simulator.
+     ---------------------------------------------------------------- */
+  :root {
+    --bg:         #f5f2ec;   /* warm off-white background */
+    --bg-alt:     #faf7f0;   /* soft cream for cards */
+    --bg-band:    #ecf0f2;   /* pale blue-grey for hero band */
+    --text:       #0a1628;   /* deep navy */
+    --muted:      #4a5a72;   /* slate for secondary text */
+    --accent:     #2b8fb8;   /* water teal — matches simulator */
+    --accent-dk:  #237396;   /* accent hover */
+    --border:     #dcd6c8;   /* cream border, low contrast */
+    --border-cool:#c5d0d7;   /* cool border for water-adjacent sections */
+    --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono:  ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3 {
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    color: var(--text);
+    margin: 0;
+    font-weight: 700;
+  }
+
+  a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
+  a:hover { color: var(--accent-dk); }
+
+  /* ----------------------------------------------------------------
+     Layout
+     ---------------------------------------------------------------- */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  .container-narrow {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  section {
+    padding: 6rem 0;
+  }
+  section + section {
+    border-top: 1px solid var(--border);
+  }
+
+  /* ----------------------------------------------------------------
+     Navigation — 3 links, sticky top
+     ---------------------------------------------------------------- */
+  nav.site-nav {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border);
+    background: rgba(245, 242, 236, 0.94);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  nav.site-nav .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .brand:hover { color: var(--text); }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+  }
+  .nav-links a {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    padding: 4px 0;
+  }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* ----------------------------------------------------------------
+     Hero — headline, sub, CTA. Subtle water-tinted background band.
+     ---------------------------------------------------------------- */
+  section.hero {
+    padding: 7rem 0 8rem;
+    text-align: center;
+    background:
+      radial-gradient(ellipse 800px 400px at 50% 100%, rgba(43, 143, 184, 0.08), transparent 70%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-band) 100%);
+    border-bottom: 1px solid var(--border-cool);
+  }
+  .hero h1 {
+    font-size: clamp(40px, 6vw, 68px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    margin: 0 auto 1.5rem;
+    max-width: 18ch;
+  }
+  .hero p.hero-lead {
+    font-size: 20px;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 58ch;
+    margin: 0 auto 3rem;
+  }
+
+  .btn-primary {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 32px;
+    border-radius: 4px;
+    transition: background 0.15s, transform 0.05s;
+    letter-spacing: 0.005em;
+    box-shadow: 0 2px 8px rgba(43, 143, 184, 0.15);
+  }
+  .btn-primary:hover { background: var(--accent-dk); color: var(--bg); }
+  .btn-primary:active { transform: translateY(1px); }
+  .btn-outline {
+    display: inline-block;
+    background: transparent;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px 24px;
+    border: 1.5px solid var(--text);
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-outline:hover { background: var(--text); color: var(--bg); }
+
+  /* ----------------------------------------------------------------
+     Chapter styling — "SECTION 01" tag + big title
+     ---------------------------------------------------------------- */
+  .chapter-num {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  .chapter-title {
+    font-size: clamp(30px, 4vw, 46px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 auto 2rem;
+    max-width: 26ch;
+    text-align: center;
+  }
+
+  .chapter-body {
+    font-size: 18px;
+    line-height: 1.7;
+    max-width: 64ch;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .chapter-body p { margin: 0 0 1.25rem; }
+  .chapter-body p:last-child { margin-bottom: 0; }
+  .chapter-body em { color: var(--accent-dk); font-style: normal; font-weight: 600; }
+
+  /* ----------------------------------------------------------------
+     Photo band — a strip of images between chapters.
+     REPLACE placeholder URLs below with your own pool photos.
+     ---------------------------------------------------------------- */
+  .photo-band {
+    margin-top: 4rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .photo-tile {
+    aspect-ratio: 4 / 3;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-alt);
+    border: 1px solid var(--border-cool);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .photo-tile img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+  }
+  .photo-caption {
+    margin-top: 1.25rem;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ----------------------------------------------------------------
+     Feature list — bullets in the calculator section
+     ---------------------------------------------------------------- */
+  .feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 2rem auto 2.5rem;
+    max-width: 62ch;
+    text-align: left;
+  }
+  .feature-list li {
+    padding: 0.75rem 0 0.75rem 2rem;
+    position: relative;
+    font-size: 17px;
+    line-height: 1.55;
+    border-bottom: 1px solid var(--border);
+  }
+  .feature-list li:last-child { border-bottom: 0; }
+  .feature-list li::before {
+    content: "→";
+    position: absolute; left: 0; top: 0.85rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .feature-list li strong {
+    color: var(--text);
+    font-weight: 700;
+  }
+  .feature-list li span {
+    color: var(--muted);
+  }
+
+  /* ----------------------------------------------------------------
+     Research — 5 paper cards
+     ---------------------------------------------------------------- */
+  .research-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+  .research-card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2rem;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .research-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .research-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+    color: var(--text);
+    line-height: 1.35;
+  }
+  .research-card .journal {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin: 0 0 1rem;
+    text-transform: uppercase;
+  }
+  .research-card p {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
+  }
+  .research-card a.card-link {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+  }
+
+  /* ----------------------------------------------------------------
+     Audience — 4 compact cards
+     ---------------------------------------------------------------- */
+  .audience-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  .audience-card {
+    padding: 1.75rem 1.25rem;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+  }
+  .audience-card h4 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .audience-card p {
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ----------------------------------------------------------------
+     About / CTA block
+     ---------------------------------------------------------------- */
+  .about-cta {
+    text-align: center;
+    margin-top: 3rem;
+  }
+  .cta-band {
+    background: var(--bg-band);
+    border: 1px solid var(--border-cool);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+    margin-top: 3rem;
+  }
+  .cta-band h3 {
+    font-size: 26px;
+    margin: 0 0 0.75rem;
+    letter-spacing: -0.02em;
+  }
+  .cta-band p {
+    color: var(--muted);
+    max-width: 50ch;
+    margin: 0 auto 1.5rem;
+    line-height: 1.55;
+  }
+
+  /* ----------------------------------------------------------------
+     Footer
+     ---------------------------------------------------------------- */
+  footer.site-footer {
+    padding: 3rem 0;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+    color: var(--muted);
+    text-align: center;
+  }
+  footer.site-footer a { color: var(--muted); text-decoration: underline; text-decoration-color: var(--border); }
+  footer.site-footer a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  footer.site-footer .sep { margin: 0 0.75rem; opacity: 0.5; }
+
+  /* ----------------------------------------------------------------
+     Responsive
+     ---------------------------------------------------------------- */
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+    section { padding: 4rem 0; }
+    section.hero { padding: 5rem 0; }
+    .hero p.hero-lead { font-size: 17px; margin-bottom: 2rem; }
+    .chapter-title { font-size: 26px; }
+    .research-grid { grid-template-columns: 1fr; gap: 1rem; }
+    .audience-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+    .photo-band { grid-template-columns: 1fr; }
+    .container, .container-narrow { padding: 0 1.25rem; }
+    .nav-links { gap: 1.25rem; }
+    .nav-links a { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION — 3 links, sticky top
+     ============================================================ -->
+<nav class="site-nav">
+  <div class="container">
+    <a href="#" class="brand">IAQ Simulator</a>
+    <div class="nav-links">
+      <a href="#calculator">Calculator</a>
+      <a href="#research">Research</a>
+      <a href="#mission-alignment">Mission</a>
+      <a href="#about">About</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============================================================
+     HERO — one headline, one sub, one CTA
+     ============================================================ -->
+<section class="hero">
+  <div class="container">
+    <h1>Cleaner air in indoor pools.</h1>
+    <p class="hero-lead">A physics-based calculator that predicts chloramine risk in your natatorium — configure your facility, see interventions ranked by score improvement.</p>
+    <a href="iaq_simulator.html" class="btn-primary">Try the calculator&nbsp;→</a>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 01 — THE PROBLEM (mission statement)
+     ============================================================ -->
+<section id="mission">
+  <div class="container-narrow">
+    <span class="chapter-num">Section 01 — The Problem</span>
+    <h2 class="chapter-title">Indoor pools have an air-quality problem.</h2>
+    <div class="chapter-body">
+      <p>Chloramines — the byproducts of chlorine reacting with sweat, urine, and skin oils — off-gas into the air above indoor pools. Above safe thresholds they cause coughing, eye irritation, and asthma exacerbation. The most vulnerable are the ones most exposed: <em>children in swim lessons, competitive swimmers logging thousands of hours, and lifeguards who breathe pool air all day</em>.</p>
+      <p>Facility managers know the risk, but the tools that let them predict and manage it are complex CFD software licensed only to consulting firms. A pool manager can't run EnergyPlus on their laptop to answer "if I raise my outdoor-air fraction from 25% to 40%, how much better does the air get?"</p>
+      <p>That's the gap this project fills.</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="photo-band">
+      <!-- REPLACE these <img> src URLs with your own pool photos.
+           For now they display as labeled placeholders. -->
+      <div class="photo-tile">Pool photo — swimmer</div>
+      <div class="photo-tile">Pool photo — lane view</div>
+      <div class="photo-tile">Pool photo — natatorium interior</div>
+    </div>
+    <div class="photo-caption">Above: representative indoor natatorium environments</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 02 — THE TOOL
+     ============================================================ -->
+<section id="calculator">
+  <div class="container-narrow">
+    <span class="chapter-num">Section 02 — The Tool</span>
+    <h2 class="chapter-title">Configure your facility. See what to change.</h2>
+    <div class="chapter-body">
+      <p>The IAQ Simulator packages 15+ peer-reviewed papers into a physics-based calculator that anyone can use. It replaces guesswork with a defensible number, and every prediction comes with an honest uncertainty band.</p>
+    </div>
+
+    <ul class="feature-list">
+      <li><strong>First-principles mass balance</strong> <span>— steady-state indoor-air model using the Proulx &amp; Hallé 2022 measured emission rate</span></li>
+      <li><strong>Per-input uncertainty propagation</strong> <span>— every parameter has a 1σ tier (Measured / Estimated / Default); the output band responds accordingly</span></li>
+      <li><strong>Live code-compliance flags</strong> <span>— CDC MAHC + Manual SPS + ASHRAE 62.1 thresholds checked in real time</span></li>
+      <li><strong>Facility-type presets</strong> <span>— rec pool, 50m competition, hotel, therapy, high-school natatorium — one click loads plausible parameters</span></li>
+      <li><strong>Vulnerable population weighting</strong> <span>— competitive swimmers, children, asthmatics correctly emit more precursor AND respond more to exposure</span></li>
+    </ul>
+
+    <p style="text-align:center;">
+      <a href="iaq_simulator.html" class="btn-primary">Open the calculator&nbsp;→</a>
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 03 — THE RESEARCH
+     ============================================================ -->
+<section id="research">
+  <div class="container">
+    <div style="max-width:64ch; margin: 0 auto;">
+      <span class="chapter-num">Section 03 — The Research</span>
+      <h2 class="chapter-title">Every number in the model has a paper behind it.</h2>
+      <div class="chapter-body">
+        <p>The tool draws on 15+ peer-reviewed sources. Five of them do most of the work — they anchor the emission rate, the pH chemistry, the vulnerability multipliers, and the health-outcome thresholds.</p>
+      </div>
+    </div>
+
+    <div class="research-grid">
+      <div class="research-card">
+        <h3>Trichloramine exposure at indoor swimming pools: a critical review</h3>
+        <p class="journal">Emmett · 2020</p>
+        <p>Consensus review of typical field measurements. The calculator's defaults are calibrated so a rec-pool configuration produces the 0.15–0.30 mg/m³ room-average band Emmett identifies as typical.</p>
+        <a href="#" class="card-link">Read →</a>
+      </div>
+
+      <div class="research-card">
+        <h3>Lung hyperpermeability and asthma prevalence in schoolchildren</h3>
+        <p class="journal">Bernard et al. · OEM · 2003</p>
+        <p>Landmark pediatric cohort (n=1,881) establishing the dose-response between cumulative pool attendance and childhood asthma. Source of the ×2.5 vulnerability multiplier for children under 12.</p>
+        <a href="#" class="card-link">Read →</a>
+      </div>
+
+      <div class="research-card">
+        <h3>Childhood asthma and environmental exposures at swimming pools</h3>
+        <p class="journal">Weisel et al. · EHP · 2009</p>
+        <p>Consensus review of the natatorium chloramine literature. Anchor for the tool's shower-compliance saturation curve and the combined-chlorine → NCl₃ relationship.</p>
+        <a href="#" class="card-link">Read →</a>
+      </div>
+
+      <div class="research-card">
+        <h3>Numerical modeling of indoor air quality in an indoor swimming pool facility</h3>
+        <p class="journal">Proulx &amp; Hallé · Frontiers · 2022</p>
+        <p>CFD study providing the tool's per-m² emission rate (4×10⁻⁹ kg/s/m²) and the stratification base of 2.0× that maps room average to swimmer-zone concentration.</p>
+        <a href="#" class="card-link">Read →</a>
+      </div>
+
+      <div class="research-card">
+        <h3>Occupational exposure to trichloramine and respiratory symptoms among indoor swimming pool workers</h3>
+        <p class="journal">Fantuzzi et al. · Env. Intl. · 2013</p>
+        <p>Personal-air-sampling study of 128 pool workers across 20 facilities. Odds ratios of 2.9–3.6 for eye and respiratory irritation above 0.5 mg/m³ — the source of the WARNING-tier boundary.</p>
+        <a href="#" class="card-link">Read →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 04 — WHO IT'S FOR
+     ============================================================ -->
+<section id="audience">
+  <div class="container">
+    <div style="max-width:64ch; margin: 0 auto;">
+      <span class="chapter-num">Section 04 — Who It's For</span>
+      <h2 class="chapter-title">Built for four kinds of user.</h2>
+      <div class="chapter-body">
+        <p>Different stakeholders in a natatorium care about different things. The tool speaks to each of them without asking them to become an atmospheric chemist.</p>
+      </div>
+    </div>
+
+    <div class="audience-grid">
+      <div class="audience-card">
+        <h4>Facility managers</h4>
+        <p>Configure your pool, get a defensible air-quality score with uncertainty bands in seconds.</p>
+      </div>
+      <div class="audience-card">
+        <h4>MEP engineers</h4>
+        <p>Fast first-order estimates before committing to a full CFD study or capital project.</p>
+      </div>
+      <div class="audience-card">
+        <h4>Coaches &amp; swimmers</h4>
+        <p>Understand what actually makes a training pool safer to breathe over long practices.</p>
+      </div>
+      <div class="audience-card">
+        <h4>Health inspectors</h4>
+        <p>Compliance flags on every input, mapped to CDC MAHC, ASHRAE 62.1, and Manual SPS.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 05 — ALIGNED WITH THE IAQ MISSION
+     ============================================================ -->
+<section id="mission-alignment">
+  <div class="container-narrow">
+    <span class="chapter-num">Section 05 — Aligned With the IAQ Mission</span>
+    <h2 class="chapter-title">Backed by the same principles as the IAQ Mission.</h2>
+    <div class="chapter-body">
+      <p>This project is built in alignment with the <em>IAQ Mission</em>, an industry-wide initiative championed by Olympic gold medalist <strong>Rowdy Gaines</strong> and Dehumidified Air Solutions. The mission advocates for source-capture ventilation, purpose-built pool dehumidification, and measurement discipline as the path forward for safer indoor pool air.</p>
+      <p>The interventions this tool ranks — raise outdoor-air fraction, install UV-C secondary disinfection, deploy overnight covers, control combined chlorine — are the same interventions the IAQ Mission advances at the policy and industry level. This tool gives individual facility operators a way to quantify what the mission argues qualitatively.</p>
+    </div>
+
+    <div class="cta-band" style="margin-top: 3rem;">
+      <h3>Learn more about the movement.</h3>
+      <p>Read the mission's platform, or follow the forthcoming white paper on measurement standards for indoor natatoriums.</p>
+      <a href="https://theiaqmission.com" target="_blank" rel="noopener" class="btn-primary">Visit the IAQ Mission&nbsp;→</a>
+      &nbsp;&nbsp;
+      <a href="#" class="btn-outline">Read the white paper (coming soon)</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 06 — ABOUT
+     ============================================================ -->
+<section id="about">
+  <div class="container-narrow">
+    <span class="chapter-num">Section 06 — About the Project</span>
+    <h2 class="chapter-title">Why I built this.</h2>
+    <div class="chapter-body">
+      <p>This is a high-school independent research project. I built it because my swim team practices at a pool where the air quality varied dramatically from one day to the next — some days you could barely finish a set without your eyes stinging — and there was no way to know why.</p>
+      <p>What started as a question — "why does the air feel worse on some days?" — turned into 18 months of learning atmospheric chemistry, indoor-air-quality physics, and how to package that rigor into something a facility manager can actually use on a Tuesday morning.</p>
+      <p>My mentor on the mechanical-engineering side is <strong>Raj Setty</strong>. Every threshold in the tool traces to a published source, and every prediction comes with an honest ±σ band. Feedback is welcome — I read every message.</p>
+    </div>
+
+    <div class="cta-band">
+      <h3>Try it on your facility.</h3>
+      <p>Load a preset that looks like your pool, tweak a few sliders, and see how your air-quality score responds to different interventions.</p>
+      <a href="iaq_simulator.html" class="btn-primary">Open the calculator&nbsp;→</a>
+      &nbsp;&nbsp;
+      <a href="mailto:noah.nigri@gmail.com" class="btn-outline">Contact me</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="site-footer">
+  <div class="container">
+    © 2025 Noah Nigri
+    <span class="sep">·</span>
+    <a href="#">GitHub</a>
+    <span class="sep">·</span>
+    <a href="mailto:noah.nigri@gmail.com">Email</a>
+  </div>
+</footer>
+
+</body>
+</html>
